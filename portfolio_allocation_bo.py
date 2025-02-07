@@ -212,7 +212,7 @@ def optimizer(dataset, max_volatilty, months_backtest =3, optim_freq=20):
     return portfolio_values, weights_history, lambda_history, l_mu_history, l_sigma_history
 
 def random_search_strategy(dataset, max_volatility, n_random_samples=100,
-                           rebalance_freq=20):
+                           months_backtest = 3, rebalance_freq=20):
     '''
     Estrategia de búsqueda aleatoria de los parámetros óptimos de la eq 4.1
     en cada fecha de rebalanceo.
@@ -235,27 +235,34 @@ def random_search_strategy(dataset, max_volatility, n_random_samples=100,
         
         if t % rebalance_freq == 0:
             
-            print(f'optimziando {t}')
+            print(f'optimizando {t}')
             best_value = -np.inf
             best_weights = weights
-
+            lambda_rand = 0.15
+            l_mu_rand = 252
+            l_sigma_rand = 252
+            
             for _ in range(n_random_samples):
                 
-                lambda_ = np.random.uniform(0.05, 0.25)
-                l_mu = np.random.randint(21, 252)
-                l_sigma = np.random.randint(21, 252)
-
-                mu_t = dataset.iloc[:t].rolling(l_mu).mean().iloc[-1]
-                sigma_t = dataset.iloc[:t].rolling(l_sigma).cov(pairwise=True).iloc[-n:]
-
-                candidate_weights = portfolio_optimization(mu_t, sigma_t, weights_history[-1], lambda_, max_volatility)
-                daily_return = np.dot(candidate_weights, dataset.iloc[t])
-                candidate_value = portfolio_values[-1] * (1 + daily_return)
-
-                if candidate_value > best_value:
+                lambda_try = np.random.uniform(0.05, 0.25)
+                l_mu_try = np.random.randint(21, 252)
+                l_sigma_try = np.random.randint(21, 252)
+                candidate_value = backtest_func(dataset, lambda_try, l_mu_try, 
+                                                l_sigma_try, max_volatility,  
+                                                months_backtest, rebalance_freq)[-1]
+                
+                if candidate_value > best_value:    
+                    best_value = candidate_value 
+                    lambda_rand = lambda_try
+                    l_mu_rand = l_mu_try
+                    l_sigma_rand = l_sigma_try
                     
-                    best_value = candidate_value
-                    best_weights = candidate_weights
+            mu_t = dataset.iloc[:t].rolling(l_mu_rand).mean().iloc[-1]
+            sigma_t = dataset.iloc[:t].rolling(l_sigma_rand).cov(pairwise=True).iloc[-n:]
+
+            best_weights = portfolio_optimization(mu_t, sigma_t, weights_history[-1],
+                                                  lambda_rand, max_volatility)
+                
 
             weights = best_weights
 
@@ -271,7 +278,7 @@ fixed_lambda = 0.1
 fixed_l_mu = 251
 fixed_l_sigma = 251
 vol= 0.15
-rebalance_freq = 21
+rebalance_freq = 5
 
 portfolio_values_fixed, weights_history_fixed = static_trading_strategy(
     returns, fixed_lambda, fixed_l_mu, 
@@ -282,7 +289,7 @@ portfolio_values_opt, weights_history_opt, lambdax, l_mux, l_sigmax = optimizer(
     returns, vol, 6, rebalance_freq
 )
 portfolio_values_random, weights_history_random = random_search_strategy(
-    returns, vol, n_random_samples=100, rebalance_freq = rebalance_freq
+    returns, vol, n_random_samples=100, months_backtest = 6, rebalance_freq = rebalance_freq
 )
 
 
